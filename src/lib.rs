@@ -455,9 +455,79 @@ fn project_to_so3(m: Matrix3<f64>) -> Matrix3<f64> {
     let mut r = svd.u.expect("Could not extract u from SVD.")
         * svd.v_t.expect("Could not extract v_t from SVD.");
 
-    if r.determinant() < 0. {}
+    let rows = r.nrows();
+    println!("{}", svd.singular_values);
+    let cols = svd.singular_values[2] as usize;
+
+    let r_neg = -r.slice((0, 0), (rows, cols)).clone_owned();
+
+    if r.determinant() < 0. {
+        r.slice_mut((0, 0), (rows, cols)).copy_from(&r_neg);
+    }
 
     r
+}
+
+#[test]
+fn test_project_to_so3() {
+    let m = Matrix3::from_rows(&[
+        RowVector3::new(0.675, 0.150, 0.720),
+        RowVector3::new(0.370, 0.771, -0.511),
+        RowVector3::new(-0.630, 0.619, 0.472),
+    ]);
+
+    let e = Matrix3::from_rows(&[
+        RowVector3::new(0.6790113606772366, 0.14894516151550874, 0.7188594514453904),
+        RowVector3::new(0.3732070788228454, 0.7731958439349471, -0.5127227937572542),
+        RowVector3::new(-0.6321867195597889, 0.616428037797474, 0.46942137342625173),
+    ]);
+
+    assert_eq!(project_to_so3(m), e);
+}
+
+fn project_to_se3(m: Matrix4<f64>) -> Matrix4<f64> {
+    rp_to_trans(
+        project_to_so3(m.fixed_slice::<U3, U3>(0, 0).clone_owned()),
+        m.fixed_slice::<U3, U1>(0, 3).clone_owned(),
+    )
+}
+
+#[test]
+fn test_project_to_se3() {
+    let m = Matrix4::from_rows(&[
+        RowVector4::new(0.675, 0.150, 0.720, 1.2),
+        RowVector4::new(0.370, 0.771, -0.511, 5.4),
+        RowVector4::new(-0.630, 0.619, 0.472, 3.6),
+        RowVector4::new(0.003, 0.002, 0.010, 0.9),
+    ]);
+
+    let e = Matrix4::from_rows(&[
+        RowVector4::new(
+            0.6790113606772366,
+            0.1489451615155089,
+            0.7188594514453908,
+            1.2,
+        ),
+        RowVector4::new(
+            0.3732070788228456,
+            0.7731958439349473,
+            -0.5127227937572543,
+            5.4,
+        ),
+        RowVector4::new(
+            -0.632186719559789,
+            0.6164280377974745,
+            0.46942137342625256,
+            3.6,
+        ),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    assert_eq!(project_to_se3(m), e);
+}
+
+fn distance_to_so3(m: Matrix3<f64>) -> f64 {
+    0
 }
 
 // fn inverse_kinematics(target: &Matrix4<f64>, theta: &mut Vector3<f64>) {
