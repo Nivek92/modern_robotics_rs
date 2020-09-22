@@ -1,6 +1,7 @@
-use na::base::dimension::{U1, U3, U4, U6};
+use na::base::dimension::{Dynamic, U1, U3, U4, U6};
 use na::base::{
-    Matrix3, Matrix4, Matrix6, RowVector3, RowVector4, RowVector6, Vector3, Vector4, Vector6,
+    Matrix3, Matrix4, Matrix6, MatrixMN, RowVector1, RowVector3, RowVector4, RowVector6, Vector3,
+    Vector4, Vector6,
 };
 use na::geometry::{Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
@@ -357,13 +358,12 @@ fn matrix_exp6(m: Matrix4<f64>) -> Matrix4<f64> {
     let v = m.fixed_slice::<U3, U1>(0, 3).clone_owned();
     let omega_theta = so3_to_vec(r);
 
-    let mut mm = Matrix4::zeros();
+    let mut mm = Matrix4::identity();
 
     if near_zero(omega_theta.norm()) {
-        mm.fixed_slice_mut::<U3, U1>(0, 0)
+        mm.fixed_slice_mut::<U3, U1>(0, 3)
             .copy_from(&(m.fixed_slice::<U3, U1>(0, 3).clone_owned()));
-        mm.fixed_slice_mut::<U1, U4>(3, 0)
-            .copy_from(&RowVector4::new(0., 0., 0., 1.));
+        println!("{}", mm);
         return mm;
     }
 
@@ -378,8 +378,6 @@ fn matrix_exp6(m: Matrix4<f64>) -> Matrix4<f64> {
     mm.fixed_slice_mut::<U3, U3>(0, 0)
         .copy_from(&(matrix_exp3(r)));
     mm.fixed_slice_mut::<U3, U1>(0, 3).copy_from(&t);
-    mm.fixed_slice_mut::<U1, U4>(3, 0)
-        .copy_from(&RowVector4::new(0., 0., 0., 1.));
     mm
 }
 
@@ -456,7 +454,6 @@ fn project_to_so3(m: Matrix3<f64>) -> Matrix3<f64> {
         * svd.v_t.expect("Could not extract v_t from SVD.");
 
     let rows = r.nrows();
-    println!("{}", svd.singular_values);
     let cols = svd.singular_values[2] as usize;
 
     let r_neg = -r.slice((0, 0), (rows, cols)).clone_owned();
@@ -552,11 +549,11 @@ fn distance_to_se3(m: Matrix4<f64>) -> f64 {
     }
 
     let mut mm = Matrix4::zeros();
-    let row = m.fixed_slice::<U1, U3>(0, 0).clone_owned();
+    let row = m.fixed_slice::<U1, U4>(3, 0).clone_owned();
 
     mm.fixed_slice_mut::<U3, U3>(0, 0)
         .copy_from(&(r.transpose() * r));
-    mm.fixed_slice_mut::<U1, U3>(3, 0).copy_from(&row);
+    mm.fixed_slice_mut::<U1, U4>(3, 0).copy_from(&row);
 
     (mm - Matrix4::identity()).norm()
 }
@@ -570,7 +567,143 @@ fn test_distance_to_se3() {
         RowVector4::new(0., 0., 0.1, 0.98),
     ]);
 
-    assert_eq!(distance_to_se3(m), 0.134931);
+    assert_eq!(distance_to_se3(m), 0.13493053768513638);
+}
+
+fn is_so3(m: Matrix3<f64>) -> bool {
+    f64::abs(distance_to_so3(m)) < 1e-3
+}
+
+#[test]
+fn test_is_so3() {
+    let m = Matrix3::from_rows(&[
+        RowVector3::new(1., 0., 0.),
+        RowVector3::new(0., 0.1, -0.95),
+        RowVector3::new(0., 1., 0.1),
+    ]);
+
+    assert_eq!(is_so3(m), false);
+}
+
+fn is_se3(m: Matrix4<f64>) -> bool {
+    f64::abs(distance_to_se3(m)) < 1e-3
+}
+
+#[test]
+fn test_is_se3() {
+    let m = Matrix4::from_rows(&[
+        RowVector4::new(1., 0., 0., 1.2),
+        RowVector4::new(0., 0.1, -0.95, 1.5),
+        RowVector4::new(0., 1., 0.1, -0.9),
+        RowVector4::new(0., 0., 0.1, 0.98),
+    ]);
+
+    assert_eq!(is_se3(m), false);
+}
+
+fn fk_in_body(
+    m: Matrix4<f64>,
+    b_list: MatrixMN<f64, U6, Dynamic>,
+    theta_list: MatrixMN<f64, U1, Dynamic>,
+) -> Matrix4<f64> {
+    let mut t = m.clone();
+
+    for i in 0..theta_list.ncols() {
+        let theta = theta_list[i];
+        let col = b_list.column(i).clone_owned();
+        let scaled_col = col * theta;
+        let screw_mat = vec_to_se3(scaled_col);
+        let transformation = matrix_exp6(screw_mat);
+
+        println!("T: {}", transformation);
+
+        t = t * transformation;
+    }
+    t
+}
+
+#[test]
+fn test_fk_in_body() {
+    let m = Matrix4::from_rows(&[
+        RowVector4::new(-1., 0., 0., 0.),
+        RowVector4::new(0., 1., 0., 6.),
+        RowVector4::new(0., 0., -1., 2.),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let b_list = MatrixMN::<f64, Dynamic, U6>::from_rows(&[
+        RowVector6::new(0., 0., -1., 2., 0., 0.),
+        RowVector6::new(0., 0., 0., 0., 1., 0.),
+        RowVector6::new(0., 0., 1., 0., 0., 0.1),
+    ]);
+
+    let theta_list = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+        RowVector1::new(std::f64::consts::PI / 2.),
+        RowVector1::new(3.),
+        RowVector1::new(std::f64::consts::PI),
+    ]);
+
+    let e = Matrix4::from_rows(&[
+        RowVector4::new(-0.000000000000000011442377452219667, 1., 0., -5.),
+        RowVector4::new(1., 0.000000000000000011442377452219667, 0., 4.),
+        RowVector4::new(0., 0., -1., 1.6858407346410207),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    assert_eq!(fk_in_body(m, b_list.transpose(), theta_list.transpose()), e);
+}
+
+fn fk_in_space(
+    m: Matrix4<f64>,
+    s_list: MatrixMN<f64, U6, Dynamic>,
+    theta_list: MatrixMN<f64, U1, Dynamic>,
+) -> Matrix4<f64> {
+    let mut t = m.clone();
+
+    for i in 0..theta_list.ncols() {
+        let theta = theta_list[theta_list.ncols() - i - 1];
+        let col = s_list.column(theta_list.ncols() - i - 1).clone_owned();
+        let scaled_col = col * theta;
+        let screw_mat = vec_to_se3(scaled_col);
+        let transformation = matrix_exp6(screw_mat);
+
+        t = transformation * t;
+    }
+    t
+}
+
+#[test]
+fn test_fk_in_space() {
+    let m = Matrix4::from_rows(&[
+        RowVector4::new(-1., 0., 0., 0.),
+        RowVector4::new(0., 1., 0., 6.),
+        RowVector4::new(0., 0., -1., 2.),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let s_list = MatrixMN::<f64, Dynamic, U6>::from_rows(&[
+        RowVector6::new(0., 0., 1., 4., 0., 0.),
+        RowVector6::new(0., 0., 0., 0., 1., 0.),
+        RowVector6::new(0., 0., -1., -6., 0., -0.1),
+    ]);
+
+    let theta_list = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+        RowVector1::new(std::f64::consts::PI / 2.),
+        RowVector1::new(3.),
+        RowVector1::new(std::f64::consts::PI),
+    ]);
+
+    let e = Matrix4::from_rows(&[
+        RowVector4::new(-0.000000000000000011442377452219667, 1., 0., -5.),
+        RowVector4::new(1., 0.000000000000000011442377452219667, 0., 4.000000000000001),
+        RowVector4::new(0., 0., -1., 1.6858407346410207),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    assert_eq!(
+        fk_in_space(m, s_list.transpose(), theta_list.transpose()),
+        e
+    );
 }
 
 // fn inverse_kinematics(target: &Matrix4<f64>, theta: &mut Vector3<f64>) {
