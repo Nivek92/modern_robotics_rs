@@ -527,7 +527,50 @@ fn test_project_to_se3() {
 }
 
 fn distance_to_so3(m: Matrix3<f64>) -> f64 {
-    0
+    if m.determinant() <= 0. {
+        return 1e+9;
+    }
+
+    (m.transpose() * m - Matrix3::identity()).norm()
+}
+
+#[test]
+fn test_distance_to_so3() {
+    let m = Matrix3::from_rows(&[
+        RowVector3::new(1., 0., 0.),
+        RowVector3::new(0., 0.1, -0.95),
+        RowVector3::new(0., 1., 0.1),
+    ]);
+
+    assert_eq!(distance_to_so3(m), 0.08835298523536149);
+}
+
+fn distance_to_se3(m: Matrix4<f64>) -> f64 {
+    let r = m.fixed_slice::<U3, U3>(0, 0).clone_owned();
+    if r.determinant() <= 0. {
+        return 1e+9;
+    }
+
+    let mut mm = Matrix4::zeros();
+    let row = m.fixed_slice::<U1, U3>(0, 0).clone_owned();
+
+    mm.fixed_slice_mut::<U3, U3>(0, 0)
+        .copy_from(&(r.transpose() * r));
+    mm.fixed_slice_mut::<U1, U3>(3, 0).copy_from(&row);
+
+    (mm - Matrix4::identity()).norm()
+}
+
+#[test]
+fn test_distance_to_se3() {
+    let m = Matrix4::from_rows(&[
+        RowVector4::new(1., 0., 0., 1.2),
+        RowVector4::new(0., 0.1, -0.95, 1.5),
+        RowVector4::new(0., 1., 0.1, -0.9),
+        RowVector4::new(0., 0., 0.1, 0.98),
+    ]);
+
+    assert_eq!(distance_to_se3(m), 0.134931);
 }
 
 // fn inverse_kinematics(target: &Matrix4<f64>, theta: &mut Vector3<f64>) {
