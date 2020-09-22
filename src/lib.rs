@@ -660,9 +660,9 @@ fn fk_in_space(
 ) -> Matrix4<f64> {
     let mut t = m.clone();
 
-    for i in 0..theta_list.ncols() {
-        let theta = theta_list[theta_list.ncols() - i - 1];
-        let col = s_list.column(theta_list.ncols() - i - 1).clone_owned();
+    for i in (0..theta_list.ncols()).rev() {
+        let theta = theta_list[i];
+        let col = s_list.column(i).clone_owned();
         let scaled_col = col * theta;
         let screw_mat = vec_to_se3(scaled_col);
         let transformation = matrix_exp6(screw_mat);
@@ -695,13 +695,161 @@ fn test_fk_in_space() {
 
     let e = Matrix4::from_rows(&[
         RowVector4::new(-0.000000000000000011442377452219667, 1., 0., -5.),
-        RowVector4::new(1., 0.000000000000000011442377452219667, 0., 4.000000000000001),
+        RowVector4::new(
+            1.,
+            0.000000000000000011442377452219667,
+            0.,
+            4.000000000000001,
+        ),
         RowVector4::new(0., 0., -1., 1.6858407346410207),
         RowVector4::new(0., 0., 0., 1.),
     ]);
 
     assert_eq!(
         fk_in_space(m, s_list.transpose(), theta_list.transpose()),
+        e
+    );
+}
+
+fn jacobian_body(
+    b_list: MatrixMN<f64, U6, Dynamic>,
+    theta_list: MatrixMN<f64, U1, Dynamic>,
+) -> MatrixMN<f64, U6, Dynamic> {
+    let mut jb = b_list.clone();
+    let mut t = Matrix4::identity();
+
+    for i in (0..theta_list.ncols() - 1).rev() {
+        t = t * matrix_exp6(vec_to_se3(
+            b_list.column(i + 1).clone_owned() * -theta_list[i + 1],
+        ));
+        jb.set_column(i, &(adjoint(t) * b_list.column(i).clone_owned()));
+    }
+
+    jb
+}
+
+#[test]
+fn test_jacobian_body() {
+    let b_list = MatrixMN::<f64, Dynamic, U6>::from_rows(&[
+        RowVector6::new(0., 0., 1., 0., 0.2, 0.2),
+        RowVector6::new(1., 0., 0., 2., 0., 3.),
+        RowVector6::new(0., 1., 0., 0., 2., 1.),
+        RowVector6::new(1., 0., 0., 0.2, 0.3, 0.4),
+    ]);
+
+    let theta_list = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+        RowVector1::new(0.2),
+        RowVector1::new(1.1),
+        RowVector1::new(0.1),
+        RowVector1::new(1.2),
+    ]);
+
+    let e = MatrixMN::<f64, Dynamic, U4>::from_rows(&[
+        RowVector4::new(-0.04528405057966491, 0.9950041652780258, 0., 1.),
+        RowVector4::new(
+            0.7435931265563965,
+            0.09304864640049498,
+            0.3623577544766736,
+            0.,
+        ),
+        RowVector4::new(
+            -0.6670971570177624,
+            0.03617541267787882,
+            -0.9320390859672263,
+            0.,
+        ),
+        RowVector4::new(
+            2.3258604714595155,
+            1.668090004953633,
+            0.5641083080438885,
+            0.2,
+        ),
+        RowVector4::new(
+            -1.4432116718196155,
+            2.945612749911765,
+            1.4330652142884392,
+            0.3,
+        ),
+        RowVector4::new(
+            -2.0663956487602655,
+            1.8288172246233696,
+            -1.5886862785321807,
+            0.4,
+        ),
+    ]);
+
+    assert_eq!(jacobian_body(b_list.transpose(), theta_list.transpose()), e);
+}
+
+fn jacobian_space(
+    s_list: MatrixMN<f64, U6, Dynamic>,
+    theta_list: MatrixMN<f64, U1, Dynamic>,
+) -> MatrixMN<f64, U6, Dynamic> {
+    let mut js = s_list.clone();
+    let mut t = Matrix4::identity();
+
+    for i in 1..theta_list.ncols() {
+        t = t * matrix_exp6(vec_to_se3(
+            s_list.column(i - 1).clone_owned() * theta_list[i - 1],
+        ));
+        js.set_column(i, &(adjoint(t) * s_list.column(i).clone_owned()));
+    }
+
+    js
+}
+
+#[test]
+fn test_jacobian_space() {
+    let b_list = MatrixMN::<f64, Dynamic, U6>::from_rows(&[
+        RowVector6::new(0., 0., 1., 0., 0.2, 0.2),
+        RowVector6::new(1., 0., 0., 2., 0., 3.),
+        RowVector6::new(0., 1., 0., 0., 2., 1.),
+        RowVector6::new(1., 0., 0., 0.2, 0.3, 0.4),
+    ]);
+
+    let theta_list = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+        RowVector1::new(0.2),
+        RowVector1::new(1.1),
+        RowVector1::new(0.1),
+        RowVector1::new(1.2),
+    ]);
+
+    let e = MatrixMN::<f64, Dynamic, U4>::from_rows(&[
+        RowVector4::new(
+            0.,
+            0.9800665778412416,
+            -0.09011563789485476,
+            0.957494264730031,
+        ),
+        RowVector4::new(
+            0.,
+            0.19866933079506122,
+            0.4445543984476258,
+            0.28487556541794845,
+        ),
+        RowVector4::new(1., 0., 0.8912073600614354, -0.04528405057966491),
+        RowVector4::new(
+            0.,
+            1.9521863824506809,
+            -2.216352156896298,
+            -0.5116153729819477,
+        ),
+        RowVector4::new(
+            0.2,
+            0.4365413247037721,
+            -2.437125727653321,
+            2.7753571339551537,
+        ),
+        RowVector4::new(
+            0.2,
+            2.960266133840988,
+            3.2357306532803083,
+            2.2251244335357394,
+        ),
+    ]);
+
+    assert_eq!(
+        jacobian_space(b_list.transpose(), theta_list.transpose()),
         e
     );
 }
