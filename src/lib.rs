@@ -1192,6 +1192,123 @@ fn test_joint_trajectory() {
     )
 }
 
+fn screw_trajectory(
+    x_start: Matrix4<f64>,
+    x_end: Matrix4<f64>,
+    tf: f64,
+    n: u32,
+    method: TimeScalingMethod,
+) -> Vec<Matrix4<f64>> {
+    let time_gap = tf / (n - 1) as f64;
+    let mut trajectory: Vec<Matrix4<f64>> = vec![Matrix4::zeros(); n as usize];
+
+    let scaling = match method {
+        TimeScalingMethod::cubic => cubic_time_scaling,
+        TimeScalingMethod::quintic => quintic_time_scaling,
+    };
+
+    for i in 0..n as usize {
+        let s = scaling(tf, time_gap * i as f64);
+        let a = trans_inv(x_start);
+        let b = a * x_end;
+        let c = matrix_log6(b) * s;
+        trajectory[i] = x_start * matrix_exp6(c);
+    }
+
+    trajectory
+}
+
+#[test]
+fn test_screw_trajectory() {
+    let x_start = Matrix4::from_rows(&[
+        RowVector4::new(1., 0., 0., 1.),
+        RowVector4::new(0., 1., 0., 0.),
+        RowVector4::new(0., 0., 1., 1.),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let x_end = Matrix4::from_rows(&[
+        RowVector4::new(0., 0., 1., 0.1),
+        RowVector4::new(1., 0., 0., 0.),
+        RowVector4::new(0., 1., 0., 4.1),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let tf = 5.;
+    let n = 4;
+    let method = TimeScalingMethod::cubic;
+
+    let e1 = Matrix4::from_rows(&[
+        RowVector4::new(
+            0.9041112663535109,
+            -0.25037215420139397,
+            0.34626088784788306,
+            0.44095776022422584,
+        ),
+        RowVector4::new(
+            0.34626088784788306,
+            0.9041112663535109,
+            -0.25037215420139397,
+            0.5287462373116416,
+        ),
+        RowVector4::new(
+            -0.25037215420139397,
+            0.34626088784788306,
+            0.9041112663535109,
+            1.600666372834503,
+        ),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+    let e2 = Matrix4::from_rows(&[
+        RowVector4::new(
+            0.34626088784788267,
+            -0.25037215420139375,
+            0.9041112663535111,
+            -0.1171114382485472,
+        ),
+        RowVector4::new(
+            0.9041112663535111,
+            0.34626088784788267,
+            -0.25037215420139375,
+            0.47274237949393444,
+        ),
+        RowVector4::new(
+            -0.25037215420139375,
+            0.9041112663535111,
+            0.34626088784788267,
+            3.2739986883842422,
+        ),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let e3 = Matrix4::from_rows(&[
+        RowVector4::new(
+            -0.0000000000000002220446049250313,
+            0.0000000000000003885780586188048,
+            0.9999999999999998,
+            0.10000000000000031,
+        ),
+        RowVector4::new(
+            0.9999999999999998,
+            -0.0000000000000002220446049250313,
+            0.0000000000000003885780586188048,
+            -0.00000000000000011102230246251565,
+        ),
+        RowVector4::new(
+            0.0000000000000003885780586188048,
+            0.9999999999999998,
+            -0.0000000000000002220446049250313,
+            4.1,
+        ),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    assert_eq!(
+        screw_trajectory(x_start, x_end, tf, n, method),
+        vec![x_start, e1, e2, e3]
+    );
+}
+
 // fn main() {
 //     let m = Matrix4::from_columns(&[
 //         Vector4::new(0., 0., 1., 0.),
