@@ -1,7 +1,7 @@
-use na::base::dimension::{Dynamic, U1, U3, U4, U6};
+use na::base::dimension::{Dynamic, U1, U3, U4, U6, U8};
 use na::base::{
-    Matrix3, Matrix4, Matrix6, MatrixMN, RowVector1, RowVector3, RowVector4, RowVector6, Vector3,
-    Vector4, Vector6,
+    Matrix3, Matrix4, Matrix6, MatrixMN, RowVector1, RowVector3, RowVector4, RowVector6,
+    RowVectorN, Vector3, Vector4, Vector6,
 };
 use na::geometry::{Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
@@ -9,6 +9,8 @@ use nalgebra as na;
 fn near_zero(x: f64) -> bool {
     f64::abs(x) < 1e-6
 }
+
+type RowVector8 = RowVectorN<f64, U8>;
 
 #[test]
 fn test_near_zero() {
@@ -1045,6 +1047,151 @@ fn test_ad() {
 
     assert_eq!(ad(v), e);
 }
+
+fn cubic_time_scaling(tf: f64, t: f64) -> f64 {
+    3. * f64::powi(1. * t / tf, 2) - 2. * f64::powi(1. * t / tf, 3)
+}
+
+#[test]
+fn test_cubic_time_scaling() {
+    let tf = 2.;
+    let t = 0.6;
+    let e = 0.21600000000000003;
+
+    assert_eq!(cubic_time_scaling(tf, t), e);
+}
+
+fn quintic_time_scaling(tf: f64, t: f64) -> f64 {
+    10. * f64::powi(1. * t / tf, 3) - 15. * f64::powi(1. * t / tf, 4)
+        + 6. * f64::powi(1. * t / tf, 5)
+}
+
+#[test]
+fn test_v() {
+    let tf = 2.;
+    let t = 0.6;
+    let e = 0.16308000000000003;
+
+    assert_eq!(quintic_time_scaling(tf, t), e);
+}
+
+enum TimeScalingMethod {
+    cubic,
+    quintic,
+}
+
+fn joint_trajectory(
+    theta_start: MatrixMN<f64, U1, Dynamic>,
+    theta_end: MatrixMN<f64, U1, Dynamic>,
+    tf: f64,
+    n: u32,
+    method: TimeScalingMethod,
+) -> MatrixMN<f64, Dynamic, Dynamic> {
+    let time_gap = tf / (n - 1) as f64;
+    let mut trajectory: MatrixMN<f64, Dynamic, Dynamic> =
+        MatrixMN::<f64, Dynamic, Dynamic>::zeros(theta_start.ncols(), n as usize);
+
+    let scaling = match method {
+        TimeScalingMethod::cubic => cubic_time_scaling,
+        TimeScalingMethod::quintic => quintic_time_scaling,
+    };
+
+    for i in 0..n {
+        let s = scaling(tf, time_gap * i as f64);
+        trajectory.set_column(
+            i as usize,
+            &((s * &theta_end + (1. - s) * &theta_start).transpose()),
+        );
+    }
+
+    trajectory.transpose()
+}
+
+#[test]
+fn test_joint_trajectory() {
+    let theta_start = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+        RowVector1::new(1.),
+        RowVector1::new(0.),
+        RowVector1::new(0.),
+        RowVector1::new(1.),
+        RowVector1::new(1.),
+        RowVector1::new(0.2),
+        RowVector1::new(0.),
+        RowVector1::new(1.),
+    ]);
+
+    let theta_end = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+        RowVector1::new(1.2),
+        RowVector1::new(0.5),
+        RowVector1::new(0.6),
+        RowVector1::new(1.1),
+        RowVector1::new(2.),
+        RowVector1::new(2.),
+        RowVector1::new(0.9),
+        RowVector1::new(1.),
+    ]);
+
+    let tf = 4.;
+    let n = 6;
+    let method = TimeScalingMethod::cubic;
+
+    let e = MatrixMN::<f64, Dynamic, U8>::from_rows(&[
+        RowVector8::from_row_slice(&[1., 0., 0., 1., 1., 0.2, 0., 1.]),
+        RowVector8::from_row_slice(&[
+            1.0208,
+            0.05200000000000001,
+            0.06240000000000001,
+            1.0104,
+            1.104,
+            0.3872000000000001,
+            0.09360000000000002,
+            1.,
+        ]),
+        RowVector8::from_row_slice(&[
+            1.0704,
+            0.17600000000000005,
+            0.21120000000000005,
+            1.0352000000000001,
+            1.352,
+            0.8336000000000001,
+            0.3168000000000001,
+            1.,
+        ]),
+        RowVector8::from_row_slice(&[
+            1.1296,
+            0.32400000000000007,
+            0.3888000000000001,
+            1.0648,
+            1.6480000000000001,
+            1.3664000000000003,
+            0.5832000000000002,
+            1.,
+        ]),
+        RowVector8::from_row_slice(&[
+            1.1792,
+            0.44800000000000006,
+            0.5376000000000001,
+            1.0896000000000001,
+            1.8960000000000001,
+            1.8128000000000002,
+            0.8064000000000001,
+            1.,
+        ]),
+        RowVector8::from_row_slice(&[1.2, 0.5, 0.6, 1.1, 2., 2., 0.9, 1.]),
+    ]);
+
+    assert_eq!(
+        joint_trajectory(
+            theta_start.transpose(),
+            theta_end.transpose(),
+            tf,
+            n,
+            method
+        ),
+        e
+    )
+}
+
 // fn main() {
 //     let m = Matrix4::from_columns(&[
 //         Vector4::new(0., 0., 1., 0.),
