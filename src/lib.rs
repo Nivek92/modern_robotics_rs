@@ -1018,17 +1018,33 @@ fn test_ik_in_space() {
     );
 }
 
-// fn inverse_kinematics(target: &Matrix4<f64>, theta: &mut Vector3<f64>) {
-//     let inverse_jacobian = Matrix3::identity();
-//     let mut error = target - forward_kinematics(theta);
-//     loop {
-//         if error > 1e-12 {
-//             theta += (inverse_jacobian * error);
-//             error = (target - forward_kinematics(theta)).norm();
-//         }
-//     }
-// }
+fn ad(v: Vector6<f64>) -> Matrix6<f64> {
+    let m1 = vec_to_so3(Vector3::new(v[0], v[1], v[2]));
+    let m2 = vec_to_so3(Vector3::new(v[3], v[4], v[5]));
 
+    let mut m = Matrix6::zeros();
+
+    m.fixed_slice_mut::<U3, U3>(0, 0).copy_from(&m1);
+    m.fixed_slice_mut::<U3, U3>(3, 0).copy_from(&m2);
+    m.fixed_slice_mut::<U3, U3>(3, 3).copy_from(&m1);
+    m
+}
+
+#[test]
+fn test_ad() {
+    let v = Vector6::new(1., 2., 3., 4., 5., 6.);
+
+    let e = Matrix6::from_rows(&[
+        RowVector6::new(0., -3., 2., 0., 0., 0.),
+        RowVector6::new(3., 0., -1., 0., 0., 0.),
+        RowVector6::new(-2., 1., 0., 0., 0., 0.),
+        RowVector6::new(0., -6., 5., 0., -3., 2.),
+        RowVector6::new(6., 0., -4., 3., 0., -1.),
+        RowVector6::new(-5., 4., 0., -2., 1., 0.),
+    ]);
+
+    assert_eq!(ad(v), e);
+}
 // fn main() {
 //     let m = Matrix4::from_columns(&[
 //         Vector4::new(0., 0., 1., 0.),
