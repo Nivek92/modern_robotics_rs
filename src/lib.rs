@@ -1,16 +1,16 @@
-use na::base::dimension::{Dynamic, U1, U3, U4, U6, U8};
-use na::base::{
+pub use na::base::dimension::{Dynamic, U1, U3, U4, U6, U8};
+pub use na::base::{
     Matrix3, Matrix4, Matrix6, MatrixMN, RowVector1, RowVector3, RowVector4, RowVector6,
     RowVectorN, Vector3, Vector4, Vector6,
 };
-use na::geometry::{Isometry3, Translation3, UnitQuaternion};
+pub use na::geometry::{Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
 
-fn near_zero(x: f64) -> bool {
+pub type RowVector8 = RowVectorN<f64, U8>;
+
+pub fn near_zero(x: f64) -> bool {
     f64::abs(x) < 1e-6
 }
-
-type RowVector8 = RowVectorN<f64, U8>;
 
 #[test]
 fn test_near_zero() {
@@ -21,7 +21,7 @@ fn test_near_zero() {
     assert_eq!(near_zero(y), true);
 }
 
-fn vec_to_so3(v: Vector3<f64>) -> Matrix3<f64> {
+pub fn vec_to_so3(v: Vector3<f64>) -> Matrix3<f64> {
     Matrix3::from_rows(&[
         RowVector3::new(0., -v[2], v[1]),
         RowVector3::new(v[2], 0., -v[0]),
@@ -41,7 +41,7 @@ fn test_vec_to_so3() {
     assert_eq!(vec_to_so3(v), m);
 }
 
-fn so3_to_vec(m: Matrix3<f64>) -> Vector3<f64> {
+pub fn so3_to_vec(m: Matrix3<f64>) -> Vector3<f64> {
     Vector3::new(m[(2, 1)], m[(0, 2)], m[(1, 0)])
 }
 
@@ -57,7 +57,7 @@ fn test_so3_to_vec() {
     assert_eq!(so3_to_vec(m), v);
 }
 
-fn axis_ang3(v: Vector3<f64>) -> (Vector3<f64>, f64) {
+pub fn axis_ang3(v: Vector3<f64>) -> (Vector3<f64>, f64) {
     (v.normalize(), v.norm())
 }
 
@@ -70,7 +70,7 @@ fn test_axis_ang3() {
     assert_eq!(axis_ang3(v), (axis, ang));
 }
 
-fn matrix_exp3(m: Matrix3<f64>) -> Matrix3<f64> {
+pub fn matrix_exp3(m: Matrix3<f64>) -> Matrix3<f64> {
     let omega_theta = so3_to_vec(m);
     if near_zero(omega_theta.norm()) {
         return Matrix3::identity();
@@ -105,7 +105,7 @@ fn test_matrix_exp3() {
     assert_eq!(matrix_exp3(m), e);
 }
 
-fn matrix_log3(r: Matrix3<f64>) -> Matrix3<f64> {
+pub fn matrix_log3(r: Matrix3<f64>) -> Matrix3<f64> {
     match (r.trace() - 1.) / 2. {
         a if a >= 1. => Matrix3::zeros(),
         a if a <= -1. => {
@@ -149,7 +149,7 @@ fn test_matrix_log3() {
     assert_eq!(matrix_log3(m), e);
 }
 
-fn rp_to_trans(r: Matrix3<f64>, p: Vector3<f64>) -> Matrix4<f64> {
+pub fn rp_to_trans(r: Matrix3<f64>, p: Vector3<f64>) -> Matrix4<f64> {
     let tra = Translation3::from(p);
     let rot = UnitQuaternion::from_matrix(&r);
     let iso = Isometry3::from_parts(tra, rot);
@@ -177,7 +177,7 @@ fn test_rp_to_trans() {
     assert_eq!(rp_to_trans(r, p), e);
 }
 
-fn trans_to_rp(t: Matrix4<f64>) -> (Matrix3<f64>, Vector3<f64>) {
+pub fn trans_to_rp(t: Matrix4<f64>) -> (Matrix3<f64>, Vector3<f64>) {
     (
         t.fixed_slice::<U3, U3>(0, 0).clone_owned(),
         t.fixed_slice::<U3, U1>(0, 3).clone_owned(),
@@ -204,7 +204,7 @@ fn test_trans_to_rp() {
     assert_eq!(trans_to_rp(t), (r, p));
 }
 
-fn trans_inv(t: Matrix4<f64>) -> Matrix4<f64> {
+pub fn trans_inv(t: Matrix4<f64>) -> Matrix4<f64> {
     let (r, p) = trans_to_rp(t);
     let rt = r.transpose();
 
@@ -233,7 +233,7 @@ fn test_trans_inv() {
     assert_eq!(trans_inv(t), e);
 }
 
-fn vec_to_se3(v: Vector6<f64>) -> Matrix4<f64> {
+pub fn vec_to_se3(v: Vector6<f64>) -> Matrix4<f64> {
     let mut m = Matrix4::zeros();
     m.fixed_slice_mut::<U3, U3>(0, 0)
         .copy_from(&vec_to_so3(Vector3::new(v[0], v[1], v[2])));
@@ -256,7 +256,7 @@ fn test_vec_to_se3() {
     assert_eq!(vec_to_se3(v), m);
 }
 
-fn se3_to_vec(m: Matrix4<f64>) -> Vector6<f64> {
+pub fn se3_to_vec(m: Matrix4<f64>) -> Vector6<f64> {
     Vector6::new(
         m[(2, 1)],
         m[(0, 2)],
@@ -281,7 +281,7 @@ fn test_se3_to_vec() {
     assert_eq!(se3_to_vec(m), v);
 }
 
-fn adjoint(t: Matrix4<f64>) -> Matrix6<f64> {
+pub fn adjoint(t: Matrix4<f64>) -> Matrix6<f64> {
     let (r, p) = trans_to_rp(t);
 
     let mut m = Matrix6::zeros();
@@ -313,7 +313,7 @@ fn test_adjoint() {
     assert_eq!(adjoint(m), e);
 }
 
-fn screw_to_axis(point: Vector3<f64>, screw: Vector3<f64>, pitch: f64) -> Vector6<f64> {
+pub fn screw_to_axis(point: Vector3<f64>, screw: Vector3<f64>, pitch: f64) -> Vector6<f64> {
     let mut v = Vector6::zeros();
     v.fixed_slice_mut::<U3, U1>(0, 0).copy_from(&screw);
     v.fixed_slice_mut::<U3, U1>(3, 0)
@@ -333,7 +333,7 @@ fn test_screw_to_axis() {
     assert_eq!(screw_to_axis(q, s, h), v);
 }
 
-fn axis_ang6(v: Vector6<f64>) -> (Vector6<f64>, f64) {
+pub fn axis_ang6(v: Vector6<f64>) -> (Vector6<f64>, f64) {
     let mut theta = Vector3::new(v[0], v[1], v[2]).norm();
 
     if near_zero(theta) {
@@ -352,7 +352,7 @@ fn test_axis_ang6() {
     assert_eq!(axis_ang6(v), (axis, ang));
 }
 
-fn matrix_exp6(m: Matrix4<f64>) -> Matrix4<f64> {
+pub fn matrix_exp6(m: Matrix4<f64>) -> Matrix4<f64> {
     let r = m.fixed_slice::<U3, U3>(0, 0).clone_owned();
     let v = m.fixed_slice::<U3, U1>(0, 3).clone_owned();
     let omega_theta = so3_to_vec(r);
@@ -403,7 +403,7 @@ fn test_matrix_exp6() {
     assert_eq!(matrix_exp6(m), e);
 }
 
-fn matrix_log6(m: Matrix4<f64>) -> Matrix4<f64> {
+pub fn matrix_log6(m: Matrix4<f64>) -> Matrix4<f64> {
     let (r, _) = trans_to_rp(m);
     let omega_mat = matrix_log3(r);
 
@@ -446,7 +446,7 @@ fn test_matrix_log6() {
     assert_eq!(matrix_log6(m), e);
 }
 
-fn project_to_so3(m: Matrix3<f64>) -> Matrix3<f64> {
+pub fn project_to_so3(m: Matrix3<f64>) -> Matrix3<f64> {
     let svd = m.svd(true, true);
     let mut r = svd.u.expect("Could not extract u from SVD.")
         * svd.v_t.expect("Could not extract v_t from SVD.");
@@ -480,7 +480,7 @@ fn test_project_to_so3() {
     assert_eq!(project_to_so3(m), e);
 }
 
-fn project_to_se3(m: Matrix4<f64>) -> Matrix4<f64> {
+pub fn project_to_se3(m: Matrix4<f64>) -> Matrix4<f64> {
     rp_to_trans(
         project_to_so3(m.fixed_slice::<U3, U3>(0, 0).clone_owned()),
         m.fixed_slice::<U3, U1>(0, 3).clone_owned(),
@@ -521,7 +521,7 @@ fn test_project_to_se3() {
     assert_eq!(project_to_se3(m), e);
 }
 
-fn distance_to_so3(m: Matrix3<f64>) -> f64 {
+pub fn distance_to_so3(m: Matrix3<f64>) -> f64 {
     if m.determinant() <= 0. {
         return 1e+9;
     }
@@ -540,7 +540,7 @@ fn test_distance_to_so3() {
     assert_eq!(distance_to_so3(m), 0.08835298523536149);
 }
 
-fn distance_to_se3(m: Matrix4<f64>) -> f64 {
+pub fn distance_to_se3(m: Matrix4<f64>) -> f64 {
     let r = m.fixed_slice::<U3, U3>(0, 0).clone_owned();
     if r.determinant() <= 0. {
         return 1e+9;
@@ -568,7 +568,7 @@ fn test_distance_to_se3() {
     assert_eq!(distance_to_se3(m), 0.13493053768513638);
 }
 
-fn is_so3(m: Matrix3<f64>) -> bool {
+pub fn is_so3(m: Matrix3<f64>) -> bool {
     f64::abs(distance_to_so3(m)) < 1e-3
 }
 
@@ -583,7 +583,7 @@ fn test_is_so3() {
     assert_eq!(is_so3(m), false);
 }
 
-fn is_se3(m: Matrix4<f64>) -> bool {
+pub fn is_se3(m: Matrix4<f64>) -> bool {
     f64::abs(distance_to_se3(m)) < 1e-3
 }
 
@@ -599,7 +599,7 @@ fn test_is_se3() {
     assert_eq!(is_se3(m), false);
 }
 
-fn fk_in_body(
+pub fn fk_in_body(
     m: Matrix4<f64>,
     b_list: &MatrixMN<f64, U6, Dynamic>,
     theta_list: &MatrixMN<f64, U1, Dynamic>,
@@ -652,7 +652,7 @@ fn test_fk_in_body() {
     );
 }
 
-fn fk_in_space(
+pub fn fk_in_space(
     m: Matrix4<f64>,
     s_list: &MatrixMN<f64, U6, Dynamic>,
     theta_list: &MatrixMN<f64, U1, Dynamic>,
@@ -710,7 +710,7 @@ fn test_fk_in_space() {
     );
 }
 
-fn jacobian_body(
+pub fn jacobian_body(
     b_list: &MatrixMN<f64, U6, Dynamic>,
     theta_list: &MatrixMN<f64, U1, Dynamic>,
 ) -> MatrixMN<f64, U6, Dynamic> {
@@ -783,7 +783,7 @@ fn test_jacobian_body() {
     );
 }
 
-fn jacobian_space(
+pub fn jacobian_space(
     s_list: &MatrixMN<f64, U6, Dynamic>,
     theta_list: &MatrixMN<f64, U1, Dynamic>,
 ) -> MatrixMN<f64, U6, Dynamic> {
@@ -856,7 +856,7 @@ fn test_jacobian_space() {
     );
 }
 
-fn ik_in_body(
+pub fn ik_in_body(
     m: Matrix4<f64>,
     d: Matrix4<f64>,
     b_list: MatrixMN<f64, U6, Dynamic>,
@@ -938,7 +938,7 @@ fn test_ik_in_body() {
     );
 }
 
-fn ik_in_space(
+pub fn ik_in_space(
     m: Matrix4<f64>,
     d: Matrix4<f64>,
     s_list: MatrixMN<f64, U6, Dynamic>,
@@ -1020,7 +1020,7 @@ fn test_ik_in_space() {
     );
 }
 
-fn ad(v: Vector6<f64>) -> Matrix6<f64> {
+pub fn ad(v: Vector6<f64>) -> Matrix6<f64> {
     let m1 = vec_to_so3(Vector3::new(v[0], v[1], v[2]));
     let m2 = vec_to_so3(Vector3::new(v[3], v[4], v[5]));
 
@@ -1048,7 +1048,7 @@ fn test_ad() {
     assert_eq!(ad(v), e);
 }
 
-fn cubic_time_scaling(tf: f64, t: f64) -> f64 {
+pub fn cubic_time_scaling(tf: f64, t: f64) -> f64 {
     3. * f64::powi(1. * t / tf, 2) - 2. * f64::powi(1. * t / tf, 3)
 }
 
@@ -1061,7 +1061,7 @@ fn test_cubic_time_scaling() {
     assert_eq!(cubic_time_scaling(tf, t), e);
 }
 
-fn quintic_time_scaling(tf: f64, t: f64) -> f64 {
+pub fn quintic_time_scaling(tf: f64, t: f64) -> f64 {
     10. * f64::powi(1. * t / tf, 3) - 15. * f64::powi(1. * t / tf, 4)
         + 6. * f64::powi(1. * t / tf, 5)
 }
@@ -1075,12 +1075,12 @@ fn test_v() {
     assert_eq!(quintic_time_scaling(tf, t), e);
 }
 
-enum TimeScalingMethod {
+pub enum TimeScalingMethod {
     cubic,
     quintic,
 }
 
-fn joint_trajectory(
+pub fn joint_trajectory(
     theta_start: MatrixMN<f64, U1, Dynamic>,
     theta_end: MatrixMN<f64, U1, Dynamic>,
     tf: f64,
@@ -1192,7 +1192,7 @@ fn test_joint_trajectory() {
     )
 }
 
-fn screw_trajectory(
+pub fn screw_trajectory(
     x_start: Matrix4<f64>,
     x_end: Matrix4<f64>,
     tf: f64,
@@ -1309,7 +1309,7 @@ fn test_screw_trajectory() {
     );
 }
 
-fn cartesian_trajectory(
+pub fn cartesian_trajectory(
     x_start: Matrix4<f64>,
     x_end: Matrix4<f64>,
     tf: f64,
@@ -1431,21 +1431,3 @@ fn test_cartesian_trajectory() {
         vec![x_start, e1, e2, e3]
     );
 }
-
-// fn main() {
-//     let m = Matrix4::from_columns(&[
-//         Vector4::new(0., 0., 1., 0.),
-//         Vector4::new(0., 1., 0., 0.),
-//         Vector4::new(-1., 0., 0., 0.),
-//         Vector4::new(60.5, -40., 11.5, 1.),
-//     ]);
-
-//     let s3 = Vector6::from_column_slice(&[-1., 0., 0., 0., 107., -40.]);
-
-//     let s2 = Vector6::from_column_slice(&[-1., 0., 0., 0., 0., -10.]);
-
-//     let s1 = Vector6::from_column_slice(&[0., 0., 1., 0., 0., 0.]);
-//     let theta = Vector3::new(0., 90., 0.);
-
-//     println!("{}", forward_kinematics(&theta))
-// }
