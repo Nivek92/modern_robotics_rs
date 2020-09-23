@@ -1309,6 +1309,129 @@ fn test_screw_trajectory() {
     );
 }
 
+fn cartesian_trajectory(
+    x_start: Matrix4<f64>,
+    x_end: Matrix4<f64>,
+    tf: f64,
+    n: u32,
+    method: TimeScalingMethod,
+) -> Vec<Matrix4<f64>> {
+    let time_gap = tf / (n - 1) as f64;
+    let mut trajectory: Vec<Matrix4<f64>> = vec![Matrix4::identity(); n as usize];
+
+    let (r_start, p_start) = trans_to_rp(x_start);
+    let (r_end, p_end) = trans_to_rp(x_end);
+
+    let scaling = match method {
+        TimeScalingMethod::cubic => cubic_time_scaling,
+        TimeScalingMethod::quintic => quintic_time_scaling,
+    };
+
+    for i in 0..n as usize {
+        let s = scaling(tf, time_gap * i as f64);
+
+        trajectory[i]
+            .fixed_slice_mut::<U3, U3>(0, 0)
+            .copy_from(&(r_start * matrix_exp3(matrix_log3(r_start.transpose() * r_end) * s)));
+        trajectory[i]
+            .fixed_slice_mut::<U3, U1>(0, 3)
+            .copy_from(&(s * p_end + (1. - s) * p_start));
+    }
+
+    trajectory
+}
+
+#[test]
+fn test_cartesian_trajectory() {
+    let x_start = Matrix4::from_rows(&[
+        RowVector4::new(1., 0., 0., 1.),
+        RowVector4::new(0., 1., 0., 0.),
+        RowVector4::new(0., 0., 1., 1.),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let x_end = Matrix4::from_rows(&[
+        RowVector4::new(0., 0., 1., 0.1),
+        RowVector4::new(1., 0., 0., 0.),
+        RowVector4::new(0., 1., 0., 4.1),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let tf = 5.;
+    let n = 4;
+    let method = TimeScalingMethod::quintic;
+
+    let e1 = Matrix4::from_rows(&[
+        RowVector4::new(
+            0.9366247432120836,
+            -0.21400107588081244,
+            0.27737633266872885,
+            0.8111111111111111,
+        ),
+        RowVector4::new(
+            0.27737633266872885,
+            0.9366247432120836,
+            -0.21400107588081244,
+            0.,
+        ),
+        RowVector4::new(
+            -0.21400107588081244,
+            0.27737633266872885,
+            0.9366247432120836,
+            1.6506172839506172,
+        ),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+    let e2 = Matrix4::from_rows(&[
+        RowVector4::new(
+            0.2773763326687284,
+            -0.21400107588081219,
+            0.9366247432120838,
+            0.2888888888888889,
+        ),
+        RowVector4::new(
+            0.9366247432120838,
+            0.2773763326687284,
+            -0.21400107588081219,
+            0.,
+        ),
+        RowVector4::new(
+            -0.21400107588081219,
+            0.9366247432120838,
+            0.2773763326687284,
+            3.4493827160493824,
+        ),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let e3 = Matrix4::from_rows(&[
+        RowVector4::new(
+            -0.0000000000000002220446049250313,
+            0.0000000000000003885780586188048,
+            0.9999999999999998,
+            0.1,
+        ),
+        RowVector4::new(
+            0.9999999999999998,
+            -0.0000000000000002220446049250313,
+            0.0000000000000003885780586188048,
+            0.,
+        ),
+        RowVector4::new(
+            0.0000000000000003885780586188048,
+            0.9999999999999998,
+            -0.0000000000000002220446049250313,
+            4.1,
+        ),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    assert_eq!(
+        cartesian_trajectory(x_start, x_end, tf, n, method),
+        vec![x_start, e1, e2, e3]
+    );
+}
+
 // fn main() {
 //     let m = Matrix4::from_columns(&[
 //         Vector4::new(0., 0., 1., 0.),
