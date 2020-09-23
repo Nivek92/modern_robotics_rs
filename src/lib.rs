@@ -204,10 +204,12 @@ fn test_trans_to_rp() {
 
 fn trans_inv(t: Matrix4<f64>) -> Matrix4<f64> {
     let (r, p) = trans_to_rp(t);
-    let tra = Translation3::from(p);
-    let rot = UnitQuaternion::from_matrix(&r);
+    let rt = r.transpose();
 
-    Isometry3::from_parts(tra, rot).inverse().to_homogeneous()
+    let mut m = Matrix4::identity();
+    m.fixed_slice_mut::<U3, U3>(0, 0).copy_from(&rt);
+    m.fixed_slice_mut::<U3, U1>(0, 3).copy_from(&(-rt * p));
+    m
 }
 
 #[test]
@@ -220,14 +222,9 @@ fn test_trans_inv() {
     ]);
 
     let e = Matrix4::from_rows(&[
-        RowVector4::new(0.9999999999999998, 0., 0., 0.),
-        RowVector4::new(0., 0., 0.9999999999999998, -2.9999999999999996),
-        RowVector4::new(
-            0.,
-            -0.9999999999999998,
-            0.,
-            -0.0000000000000004440892098500626,
-        ),
+        RowVector4::new(1., 0., 0., 0.),
+        RowVector4::new(0., 0., 1., -3.),
+        RowVector4::new(0., -1., 0., 0.),
         RowVector4::new(0., 0., 0., 1.),
     ]);
 
@@ -257,7 +254,7 @@ fn test_vec_to_se3() {
     assert_eq!(vec_to_se3(v), m);
 }
 
-fn se_to_vec(m: Matrix4<f64>) -> Vector6<f64> {
+fn se3_to_vec(m: Matrix4<f64>) -> Vector6<f64> {
     Vector6::new(
         m[(2, 1)],
         m[(0, 2)],
@@ -269,7 +266,7 @@ fn se_to_vec(m: Matrix4<f64>) -> Vector6<f64> {
 }
 
 #[test]
-fn test_se_to_vec() {
+fn test_se3_to_vec() {
     let m = Matrix4::from_rows(&[
         RowVector4::new(0., -3., 2., 4.),
         RowVector4::new(3., 0., -1., 5.),
@@ -279,7 +276,7 @@ fn test_se_to_vec() {
 
     let v = Vector6::new(1., 2., 3., 4., 5., 6.);
 
-    assert_eq!(se_to_vec(m), v);
+    assert_eq!(se3_to_vec(m), v);
 }
 
 fn adjoint(t: Matrix4<f64>) -> Matrix6<f64> {
@@ -363,7 +360,6 @@ fn matrix_exp6(m: Matrix4<f64>) -> Matrix4<f64> {
     if near_zero(omega_theta.norm()) {
         mm.fixed_slice_mut::<U3, U1>(0, 3)
             .copy_from(&(m.fixed_slice::<U3, U1>(0, 3).clone_owned()));
-        println!("{}", mm);
         return mm;
     }
 
@@ -406,7 +402,7 @@ fn test_matrix_exp6() {
 }
 
 fn matrix_log6(m: Matrix4<f64>) -> Matrix4<f64> {
-    let (r, p) = trans_to_rp(m);
+    let (r, _) = trans_to_rp(m);
     let omega_mat = matrix_log3(r);
 
     if omega_mat == Matrix3::zeros() {
@@ -416,13 +412,13 @@ fn matrix_log6(m: Matrix4<f64>) -> Matrix4<f64> {
         return mm;
     }
 
-    let theta = f64::acos(r.trace() - 1.) / 2.;
+    let theta = f64::acos((r.trace() - 1.) / 2.);
 
     let mut mm = Matrix4::zeros();
     mm.fixed_slice_mut::<U3, U3>(0, 0).copy_from(&omega_mat);
     mm.fixed_slice_mut::<U3, U1>(0, 3).copy_from(
-        &((Matrix3::identity() - omega_mat / 2.
-            + (1. / theta - 1. / f64::tan(theta / 2.) / 2.) * (omega_mat * omega_mat) / theta)
+        &(((Matrix3::identity() - omega_mat / 2.)
+            + (1. / theta - 1. / f64::tan(theta / 2.) / 2.) * ((omega_mat * omega_mat) / theta))
             * m.fixed_slice::<U3, U1>(0, 3).clone_owned()),
     );
 
@@ -441,7 +437,7 @@ fn test_matrix_log6() {
     let e = Matrix4::from_rows(&[
         RowVector4::new(0., 0., 0., 0.),
         RowVector4::new(0., 0., -1.5707963267948966, 2.356194490192345),
-        RowVector4::new(0., 1.5707963267948966, 0., 2.376713387622238),
+        RowVector4::new(0., 1.5707963267948966, 0., 2.3561944901923453),
         RowVector4::new(0., 0., 0., 0.),
     ]);
 
@@ -603,8 +599,8 @@ fn test_is_se3() {
 
 fn fk_in_body(
     m: Matrix4<f64>,
-    b_list: MatrixMN<f64, U6, Dynamic>,
-    theta_list: MatrixMN<f64, U1, Dynamic>,
+    b_list: &MatrixMN<f64, U6, Dynamic>,
+    theta_list: &MatrixMN<f64, U1, Dynamic>,
 ) -> Matrix4<f64> {
     let mut t = m.clone();
 
@@ -614,8 +610,6 @@ fn fk_in_body(
         let scaled_col = col * theta;
         let screw_mat = vec_to_se3(scaled_col);
         let transformation = matrix_exp6(screw_mat);
-
-        println!("T: {}", transformation);
 
         t = t * transformation;
     }
@@ -650,7 +644,10 @@ fn test_fk_in_body() {
         RowVector4::new(0., 0., 0., 1.),
     ]);
 
-    assert_eq!(fk_in_body(m, b_list.transpose(), theta_list.transpose()), e);
+    assert_eq!(
+        fk_in_body(m, &b_list.transpose(), &theta_list.transpose()),
+        e
+    );
 }
 
 fn fk_in_space(
@@ -712,8 +709,8 @@ fn test_fk_in_space() {
 }
 
 fn jacobian_body(
-    b_list: MatrixMN<f64, U6, Dynamic>,
-    theta_list: MatrixMN<f64, U1, Dynamic>,
+    b_list: &MatrixMN<f64, U6, Dynamic>,
+    theta_list: &MatrixMN<f64, U1, Dynamic>,
 ) -> MatrixMN<f64, U6, Dynamic> {
     let mut jb = b_list.clone();
     let mut t = Matrix4::identity();
@@ -778,7 +775,10 @@ fn test_jacobian_body() {
         ),
     ]);
 
-    assert_eq!(jacobian_body(b_list.transpose(), theta_list.transpose()), e);
+    assert_eq!(
+        jacobian_body(&b_list.transpose(), &theta_list.transpose()),
+        e
+    );
 }
 
 fn jacobian_space(
@@ -851,6 +851,91 @@ fn test_jacobian_space() {
     assert_eq!(
         jacobian_space(b_list.transpose(), theta_list.transpose()),
         e
+    );
+}
+
+fn ik_in_body(
+    m: Matrix4<f64>,
+    d: Matrix4<f64>,
+    b_list: MatrixMN<f64, U6, Dynamic>,
+    theta_list: MatrixMN<f64, U1, Dynamic>,
+    tolerance: (f64, f64),
+) -> (MatrixMN<f64, U1, Dynamic>, bool) {
+    let (w_tolerance, v_tolerance) = tolerance;
+    let max_iterations = 20;
+
+    let mut i = 0;
+    let mut joint_configuration = theta_list.clone();
+
+    let mut vb = se3_to_vec(matrix_log6(
+        trans_inv(fk_in_body(m, &b_list, &joint_configuration)) * d,
+    ));
+
+    let mut e = Vector3::new(vb[0], vb[1], vb[2]).norm() > w_tolerance
+        || Vector3::new(vb[3], vb[4], vb[5]).norm() > v_tolerance;
+
+    while e && i < max_iterations {
+        let pseudo_inverse = jacobian_body(&b_list, &joint_configuration)
+            .pseudo_inverse(1e-15)
+            .expect("Could not calculate the pseudo inverse.");
+        joint_configuration = joint_configuration + (pseudo_inverse * vb).transpose();
+        i += 1;
+        vb = se3_to_vec(matrix_log6(
+            trans_inv(fk_in_body(m, &b_list, &joint_configuration)) * d,
+        ));
+
+        e = Vector3::new(vb[0], vb[1], vb[2]).norm() > w_tolerance
+            || Vector3::new(vb[3], vb[4], vb[5]).norm() > v_tolerance;
+    }
+    (joint_configuration, !e)
+}
+
+#[test]
+fn test_ik_in_body() {
+    let m = Matrix4::from_rows(&[
+        RowVector4::new(-1., 0., 0., 0.),
+        RowVector4::new(0., 1., 0., 6.),
+        RowVector4::new(0., 0., -1., 2.),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let d = Matrix4::from_rows(&[
+        RowVector4::new(0., 1., 0., -5.),
+        RowVector4::new(1., 0., 0., 4.),
+        RowVector4::new(0., 0., -1., 1.6858),
+        RowVector4::new(0., 0., 0., 1.),
+    ]);
+
+    let b_list = MatrixMN::<f64, Dynamic, U6>::from_rows(&[
+        RowVector6::new(0., 0., -1., 2., 0., 0.),
+        RowVector6::new(0., 0., 0., 0., 1., 0.),
+        RowVector6::new(0., 0., 1., 0., 0., 0.1),
+    ]);
+
+    let theta_list = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+        RowVector1::new(1.5),
+        RowVector1::new(2.5),
+        RowVector1::new(3.),
+    ]);
+
+    let e = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+        RowVector1::new(1.5707381937148923),
+        RowVector1::new(2.999666997382942),
+        RowVector1::new(3.141539129217613),
+    ]);
+
+    let w_tolerance = 0.01;
+    let v_tolerance = 0.001;
+
+    assert_eq!(
+        ik_in_body(
+            m,
+            d,
+            b_list.transpose(),
+            theta_list.transpose(),
+            (w_tolerance, v_tolerance)
+        ),
+        (e.transpose(), true)
     );
 }
 
