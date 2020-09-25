@@ -1,13 +1,16 @@
-pub mod base {
-    pub use na::base::dimension::{Dynamic, U1, U3, U4, U6, U8};
-    pub use na::base::{
+pub mod na {
+    pub use nalgebra::base::dimension::{Dynamic, U1, U3, U4, U6, U8};
+    pub use nalgebra::base::{
         Matrix3, Matrix4, Matrix6, MatrixMN, RowVector1, RowVector3, RowVector4, RowVector6,
         RowVectorN, Vector3, Vector4, Vector6,
     };
-    pub use na::geometry::{Isometry3, Translation3, UnitQuaternion};
-    use nalgebra as na;
-
+    pub use nalgebra::geometry::{Isometry3, Translation3, UnitQuaternion};
     pub type RowVector8 = RowVectorN<f64, U8>;
+}
+
+pub mod core {
+
+    use super::na::*;
 
     pub fn columns_to_vec(columns: &MatrixMN<f64, U1, Dynamic>) -> Vec<f64> {
         let mut vec = vec![];
@@ -83,11 +86,11 @@ pub mod base {
     }
 
     pub fn rp_to_trans(r: &Matrix3<f64>, p: &Vector3<f64>) -> Matrix4<f64> {
-        let tra = Translation3::from(*p);
-        let rot = UnitQuaternion::from_matrix(r);
-        let iso = Isometry3::from_parts(tra, rot);
+        let mut m = Matrix4::identity();
 
-        iso.to_homogeneous()
+        m.fixed_slice_mut::<U3, U3>(0, 0).copy_from(r);
+        m.fixed_slice_mut::<U3, U1>(0, 3).copy_from(p);
+        m
     }
 
     pub fn trans_to_rp(t: &Matrix4<f64>) -> (Matrix3<f64>, Vector3<f64>) {

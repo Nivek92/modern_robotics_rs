@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
 
-  use modern_robotics_rs::base::*;
+  use modern_robotics_rs::core::*;
+  use modern_robotics_rs::na::*;
 
   #[test]
   fn test_columns_to_vec() {
