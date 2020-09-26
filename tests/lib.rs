@@ -2,11 +2,17 @@
 mod tests {
 
   use modern_robotics_rs::core::*;
-  use modern_robotics_rs::na::*;
+  pub use nalgebra::base::dimension::{Dynamic, U1, U3, U4, U6, U8};
+  pub use nalgebra::base::{
+    Matrix3, Matrix4, Matrix6, MatrixMN, RowVector1, RowVector3, RowVector4, RowVector6,
+    RowVectorN, Vector3, Vector4, Vector6,
+  };
+  pub use nalgebra::geometry::{Isometry3, Translation3, UnitQuaternion};
+  pub type RowVector8 = RowVectorN<f32, U8>;
 
   #[test]
   fn test_columns_to_vec() {
-    let columns = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+    let columns = MatrixMN::<f32, Dynamic, U1>::from_rows(&[
       RowVector1::new(1.),
       RowVector1::new(2.),
       RowVector1::new(3.),
@@ -19,7 +25,7 @@ mod tests {
 
   #[test]
   fn test_vec_to_columns() {
-    let columns = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+    let columns = MatrixMN::<f32, Dynamic, U1>::from_rows(&[
       RowVector1::new(1.),
       RowVector1::new(2.),
       RowVector1::new(3.),
@@ -395,7 +401,7 @@ mod tests {
       Vector6::new(0., 0., 1., 0., 0., 0.1),
     ];
 
-    let theta_list = vec![std::f64::consts::PI / 2., 3., std::f64::consts::PI];
+    let theta_list = vec![std::f32::consts::PI / 2., 3., std::f32::consts::PI];
 
     let e = Matrix4::from_rows(&[
       RowVector4::new(-0.000000000000000011442377452219667, 1., 0., -5.),
@@ -422,7 +428,7 @@ mod tests {
       Vector6::new(0., 0., -1., -6., 0., -0.1),
     ];
 
-    let theta_list = vec![std::f64::consts::PI / 2., 3., std::f64::consts::PI];
+    let theta_list = vec![std::f32::consts::PI / 2., 3., std::f32::consts::PI];
 
     let e = Matrix4::from_rows(&[
       RowVector4::new(-0.000000000000000011442377452219667, 1., 0., -5.),
@@ -449,7 +455,7 @@ mod tests {
     ];
 
     let theta_list = vec![0.2, 1.1, 0.1, 1.2];
-    let e = MatrixMN::<f64, Dynamic, U4>::from_rows(&[
+    let e = MatrixMN::<f32, Dynamic, U4>::from_rows(&[
       RowVector4::new(-0.04528405057966491, 0.9950041652780258, 0., 1.),
       RowVector4::new(
         0.7435931265563965,
@@ -496,7 +502,7 @@ mod tests {
     ];
 
     let theta_list = vec![0.2, 1.1, 0.1, 1.2];
-    let e = MatrixMN::<f64, Dynamic, U4>::from_rows(&[
+    let e = MatrixMN::<f32, Dynamic, U4>::from_rows(&[
       RowVector4::new(
         0.,
         0.9800665778412416,
@@ -557,7 +563,7 @@ mod tests {
 
     let theta_list = vec![1.5, 2.5, 3.];
 
-    let e = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+    let e = MatrixMN::<f32, Dynamic, U1>::from_rows(&[
       RowVector1::new(1.5707381937148923),
       RowVector1::new(2.999666997382942),
       RowVector1::new(3.141539129217613),
@@ -596,7 +602,7 @@ mod tests {
 
     let theta_list = vec![1.5, 2.5, 3.];
 
-    let e = MatrixMN::<f64, Dynamic, U1>::from_rows(&[
+    let e = MatrixMN::<f32, Dynamic, U1>::from_rows(&[
       RowVector1::new(1.57073782965672),
       RowVector1::new(2.9996638446725234),
       RowVector1::new(3.141534199856583),
@@ -655,7 +661,7 @@ mod tests {
     let n = 6;
     let method = TimeScalingMethod::cubic;
 
-    let e = MatrixMN::<f64, Dynamic, U8>::from_rows(&[
+    let e = MatrixMN::<f32, Dynamic, U8>::from_rows(&[
       RowVector8::from_row_slice(&[1., 0., 0., 1., 1., 0.2, 0., 1.]),
       RowVector8::from_row_slice(&[
         1.0208,

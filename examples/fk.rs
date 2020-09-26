@@ -1,5 +1,5 @@
 use modern_robotics_rs::core::fk_in_space;
-use modern_robotics_rs::na::{Matrix4, RowVector4, Vector6};
+use nalgebra::base::{Matrix4, RowVector4, Vector6};
 
 fn main() {
   let m = Matrix4::from_rows(&[
@@ -19,9 +19,9 @@ fn main() {
       &m,
       &vec![s1, s2, s3],
       &vec![
-        std::f64::consts::FRAC_PI_2,
-        std::f64::consts::FRAC_PI_2,
-        std::f64::consts::FRAC_PI_2
+        std::f32::consts::FRAC_PI_2,
+        std::f32::consts::FRAC_PI_2,
+        std::f32::consts::FRAC_PI_2
       ]
     )
   );
